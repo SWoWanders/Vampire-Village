@@ -336,6 +336,2124 @@
     </div>
 
     <script>
+        // GITHUB PAGES FIX: More robust initialization
+        // Check if DOM is already loaded (readyState is "complete" or "interactive")
+        function initGame() {
+            console.log('Init game called, readyState:', document.readyState);
+            try {
+                initializeGameLogic();
+            } catch (e) {
+                console.error('FATAL ERROR: ' + e.message);
+                console.error(e.stack);
+            }
+        }
+        
+        // Try multiple initialization strategies for GitHub Pages compatibility
+        if (document.readyState === 'loading') {
+            // DOM still loading, use event listener
+            console.log('DOM still loading, adding listener');
+            document.addEventListener('DOMContentLoaded', initGame);
+        } else {
+            // DOM already loaded, init immediately
+            console.log('DOM already loaded, initializing immediately');
+            initGame();
+        }
+        
+        // Fallback: also try window.onload for complete page load
+        window.addEventListener('load', function() {
+            console.log('Window load event fired');
+            // If game hasn't initialized yet, try again
+            if (typeof game === 'undefined' || !game) {
+                console.log('Game not initialized, trying again');
+                initGame();
+            }
+        });
+        
+        function initializeGameLogic() {
+            // Prevent double initialization
+            if (window.gameInitialized) {
+                console.log('Game already initialized, skipping');
+                return;
+            }
+            window.gameInitialized = true;
+            
+            console.log('Initializing game logic...');
+            
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const gameContainer = document.getElementById('gameContainer');
+            
+            if (!canvas || !ctx || !gameContainer) {
+                console.error('Critical elements not found:', {
+                    canvas: !!canvas,
+                    ctx: !!ctx,
+                    gameContainer: !!gameContainer
+                });
+                return;
+            }
+            
+            function resize() {
+                if (gameContainer.clientWidth > 0 && gameContainer.clientHeight > 0) {
+                    canvas.width = gameContainer.clientWidth;
+                    canvas.height = gameContainer.clientHeight;
+                } else {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight - 140;
+                }
+            }
+            
+            resize();
+            window.addEventListener('resize', resize);
+            
+            // Audio setup
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            let audioCtx = null;
+            let menuMusicOsc = null;
+            let menuMusicGain = null;
+            let gameMusicInterval = null;
+            let audioInitialized = false;
+            
+            function initAudio() {
+                if (!audioCtx) {
+                    audioCtx = new AudioContext();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                audioInitialized = true;
+            }
+            
+            function startMenuMusic() {
+                if (!audioCtx) initAudio();
+                if (menuMusicOsc) return;
+                
+                const notes = [146.83, 174.61, 220.00, 293.66];
+                let noteIndex = 0;
+                
+                function playMenuChord() {
+                    if (!menuMusicOsc) return;
+                    
+                    try { if (menuMusicOsc) menuMusicOsc.stop(); } catch(e) {}
+                    
+                    menuMusicOsc = audioCtx.createOscillator();
+                    menuMusicGain = audioCtx.createGain();
+                    
+                    menuMusicOsc.type = 'sine';
+                    menuMusicOsc.frequency.setValueAtTime(notes[noteIndex], audioCtx.currentTime);
+                    
+                    const vibrato = audioCtx.createOscillator();
+                    vibrato.frequency.value = 5;
+                    const vibratoGain = audioCtx.createGain();
+                    vibratoGain.gain.value = 3;
+                    vibrato.connect(vibratoGain);
+                    vibratoGain.connect(menuMusicOsc.frequency);
+                    vibrato.start();
+                    
+                    menuMusicGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                    menuMusicGain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 1);
+                    menuMusicGain.gain.exponentialRampToValueAtTime(0.05, audioCtx.currentTime + 3);
+                    
+                    menuMusicOsc.connect(menuMusicGain);
+                    menuMusicGain.connect(audioCtx.destination);
+                    menuMusicOsc.start();
+                    
+                    noteIndex = (noteIndex + 1) % notes.length;
+                    
+                    setTimeout(() => {
+                        const menuScreen = document.getElementById('menuScreen');
+                        if (menuScreen && menuScreen.classList.contains('hidden')) {
+                            stopMenuMusic();
+                        } else {
+                            playMenuChord();
+                        }
+                    }, 3000);
+                }
+                
+                playMenuChord();
+            }
+            
+            function stopMenuMusic() {
+                if (menuMusicOsc) {
+                    try {
+                        const now = audioCtx.currentTime;
+                        menuMusicGain.gain.cancelScheduledValues(now);
+                        menuMusicGain.gain.setValueAtTime(menuMusicGain.gain.value, now);
+                        menuMusicGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                        menuMusicOsc.stop(now + 0.5);
+                    } catch(e) {}
+                    menuMusicOsc = null;
+                    menuMusicGain = null;
+                }
+            }
+            
+            function startGameMusic() {
+                if (!audioCtx) initAudio();
+                if (gameMusicInterval) return;
+                
+                const bassNotes = [73.42, 87.31, 98.00, 65.41];
+                let bassIndex = 0;
+                
+                function playGameChord() {
+                    if (!game || game.state === 'menu' || game.state === 'gameOver' || game.state === 'win') {
+                        stopGameMusic();
+                        return;
+                    }
+                    
+                    const now = audioCtx.currentTime;
+                    
+                    const bass = audioCtx.createOscillator();
+                    const bassGain = audioCtx.createGain();
+                    bass.type = 'sawtooth';
+                    bass.frequency.setValueAtTime(bassNotes[bassIndex], now);
+                    bassGain.gain.setValueAtTime(0, now);
+                    bassGain.gain.linearRampToValueAtTime(0.1, now + 0.5);
+                    bassGain.gain.exponentialRampToValueAtTime(0.02, now + 2);
+                    bass.connect(bassGain);
+                    bassGain.connect(audioCtx.destination);
+                    bass.start(now);
+                    bass.stop(now + 2);
+                    
+                    const high = audioCtx.createOscillator();
+                    const highGain = audioCtx.createGain();
+                    high.type = 'sine';
+                    high.frequency.setValueAtTime(bassNotes[bassIndex] * 4, now);
+                    highGain.gain.setValueAtTime(0, now);
+                    highGain.gain.linearRampToValueAtTime(0.05, now + 1);
+                    highGain.gain.exponentialRampToValueAtTime(0.01, now + 2);
+                    high.connect(highGain);
+                    highGain.connect(audioCtx.destination);
+                    high.start(now);
+                    high.stop(now + 2);
+                    
+                    bassIndex = (bassIndex + 1) % bassNotes.length;
+                }
+                
+                playGameChord();
+                gameMusicInterval = setInterval(playGameChord, 2000);
+            }
+            
+            function stopGameMusic() {
+                if (gameMusicInterval) {
+                    clearInterval(gameMusicInterval);
+                    gameMusicInterval = null;
+                }
+            }
+            
+            function playSound(type) {
+                if (!audioCtx) return;
+                
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                const now = audioCtx.currentTime;
+                
+                switch(type) {
+                    case 'drain':
+                        osc.frequency.setValueAtTime(200, now);
+                        osc.frequency.linearRampToValueAtTime(180, now + 0.1);
+                        osc.frequency.linearRampToValueAtTime(200, now + 0.2);
+                        gain.gain.setValueAtTime(0.3, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                        osc.start(now);
+                        osc.stop(now + 0.2);
+                        break;
+                    case 'convert':
+                        osc.frequency.setValueAtTime(100, now);
+                        osc.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+                        gain.gain.setValueAtTime(0.5, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                        osc.start(now);
+                        osc.stop(now + 0.3);
+                        break;
+                    case 'bat':
+                        osc.frequency.setValueAtTime(100, now);
+                        osc.frequency.linearRampToValueAtTime(800, now + 0.5);
+                        gain.gain.setValueAtTime(0.3, now);
+                        gain.gain.linearRampToValueAtTime(0, now + 0.5);
+                        osc.start(now);
+                        osc.stop(now + 0.5);
+                        break;
+                    case 'hit':
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(400, now);
+                        osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+                        gain.gain.setValueAtTime(0.3, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                        osc.start(now);
+                        osc.stop(now + 0.1);
+                        break;
+                    case 'win':
+                        osc.frequency.setValueAtTime(262, now);
+                        osc.frequency.setValueAtTime(330, now + 0.1);
+                        osc.frequency.setValueAtTime(392, now + 0.2);
+                        osc.frequency.setValueAtTime(523, now + 0.3);
+                        gain.gain.setValueAtTime(0.3, now);
+                        gain.gain.linearRampToValueAtTime(0, now + 0.6);
+                        osc.start(now);
+                        osc.stop(now + 0.6);
+                        break;
+                }
+            }
+            
+            class Particle {
+                constructor(x, y, color, speed, life) {
+                    this.x = x;
+                    this.y = y;
+                    this.color = color;
+                    this.vx = (Math.random() - 0.5) * speed;
+                    this.vy = (Math.random() - 0.5) * speed;
+                    this.life = life;
+                    this.maxLife = life;
+                    this.size = Math.random() * 4 + 2;
+                }
+                
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.life--;
+                    this.size *= 0.95;
+                }
+                
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = this.life / this.maxLife;
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+            
+            class Entity {
+                constructor(x, y, emoji, size) {
+                    this.x = x || canvas.width / 2;
+                    this.y = y || canvas.height / 2;
+                    this.emoji = emoji;
+                    this.size = size;
+                    this.vx = 0;
+                    this.vy = 0;
+                    this.speed = 1;
+                    this.markedForDeletion = false;
+                }
+                
+                update() {
+                    this.x += this.vx * this.speed;
+                    this.y += this.vy * this.speed;
+                    
+                    this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                    this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                }
+                
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.shadowBlur = 0;
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    
+                    ctx.font = `${this.size}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.fillText(this.emoji, this.x + 2, this.y + 2);
+                    
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(this.emoji, this.x, this.y);
+                    
+                    ctx.restore();
+                }
+                
+                distanceTo(other) {
+                    if (!other) return Infinity;
+                    return Math.hypot(this.x - other.x, this.y - other.y);
+                }
+                
+                overlapsWith(other) {
+                    const minDistance = (this.size + other.size) / 2;
+                    return this.distanceTo(other) < minDistance;
+                }
+                
+                pushAwayFrom(other, force = 1) {
+                    const dx = this.x - other.x;
+                    const dy = this.y - other.y;
+                    const dist = Math.hypot(dx, dy);
+                    
+                    if (dist > 0 && dist < (this.size + other.size) / 2) {
+                        const overlap = ((this.size + other.size) / 2 - dist) / 2;
+                        const pushX = (dx / dist) * overlap * force;
+                        const pushY = (dy / dist) * overlap * force;
+                        
+                        this.x += pushX;
+                        this.y += pushY;
+                        
+                        this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                        this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                    }
+                }
+                
+                checkCornerStuck() {
+                    const margin = this.size * 2;
+                    const nearLeft = this.x < margin;
+                    const nearRight = this.x > canvas.width - margin;
+                    const nearTop = this.y < margin;
+                    const nearBottom = this.y > canvas.height - margin;
+                    
+                    const inCorner = (nearLeft || nearRight) && (nearTop || nearBottom);
+                    
+                    if (!inCorner) return null;
+                    
+                    let escapeX = 0;
+                    let escapeY = 0;
+                    
+                    if (nearLeft) escapeX = 1;
+                    else if (nearRight) escapeX = -1;
+                    
+                    if (nearTop) escapeY = 1;
+                    else if (nearBottom) escapeY = -1;
+                    
+                    const len = Math.hypot(escapeX, escapeY);
+                    if (len > 0) {
+                        return { x: escapeX / len, y: escapeY / len };
+                    }
+                    return null;
+                }
+            }
+            
+            class Dracula extends Entity {
+                constructor(x, y, startingBlood = 25) {
+                    super(x, y, '🧛', 32);
+                    this.blood = startingBlood;
+                    this.maxBlood = 100;
+                    this.speed = 3;
+                    this.normalSpeed = 3;
+                    this.batMode = false;
+                    this.batModeTimer = 0;
+                    this.draining = null;
+                    this.invulnerable = 0;
+                    this.autoTransformTriggered = false;
+                    this.lastDrainSound = 0;
+                }
+                
+                update(input, game) {
+                    let dx = 0;
+                    let dy = 0;
+                    
+                    if (input.keys.has('w') || input.keys.has('ArrowUp')) dy = -1;
+                    if (input.keys.has('s') || input.keys.has('ArrowDown')) dy = 1;
+                    if (input.keys.has('a') || input.keys.has('ArrowLeft')) dx = -1;
+                    if (input.keys.has('d') || input.keys.has('ArrowRight')) dx = 1;
+                    
+                    if (input.touch.active && input.touch.x !== null) {
+                        const rect = canvas.getBoundingClientRect();
+                        const tdx = (input.touch.x - rect.left) - this.x;
+                        const tdy = (input.touch.y - rect.top) - this.y;
+                        const dist = Math.hypot(tdx, tdy);
+                        if (dist > 5) {
+                            dx = tdx / dist;
+                            dy = tdy / dist;
+                        }
+                    }
+                    
+                    if (dx !== 0 && dy !== 0) {
+                        const len = Math.hypot(dx, dy);
+                        dx /= len;
+                        dy /= len;
+                    }
+                    
+                    this.vx = dx;
+                    this.vy = dy;
+                    
+                    if (this.batMode) {
+                        this.batModeTimer--;
+                        this.emoji = '🦇';
+                        this.speed = this.normalSpeed * 2;
+                        
+                        this.checkBatDrain(game);
+                        
+                        if (this.batModeTimer <= 0) {
+                            this.batMode = false;
+                            this.emoji = '🧛';
+                            this.speed = this.blood > 0 ? this.normalSpeed : this.normalSpeed * 0.5;
+                            this.autoTransformTriggered = false;
+                            this.blood = 25;
+                            this.draining = null;
+                            game.addParticles(this.x, this.y, '#8a2be2', 15);
+                            playSound('bat');
+                        }
+                    } else {
+                        this.speed = this.blood > 0 ? this.normalSpeed : this.normalSpeed * 0.5;
+                        
+                        if (this.blood >= 100 && !this.autoTransformTriggered) {
+                            this.autoTransformTriggered = true;
+                            this.batMode = true;
+                            this.batModeTimer = 1200;
+                            this.blood = 100;
+                            game.addParticles(this.x, this.y, '#8a2be2', 25);
+                            playSound('bat');
+                            game.showNotification('BAT MODE! Fly over houses!');
+                        }
+                    }
+                    
+                    if (!this.batMode) {
+                        for (let house of game.houses) {
+                            if (this.checkCollision(house)) {
+                                this.resolveCollision(house);
+                            }
+                        }
+                    }
+                    
+                    if (!this.batMode && this.invulnerable <= 0) {
+                        for (let garlic of game.garlics) {
+                            if (this.distanceTo(garlic) < this.size) {
+                                this.blood = Math.max(0, this.blood - 0.5);
+                                this.invulnerable = 30;
+                                playSound('hit');
+                                game.addParticles(this.x, this.y, '#fff', 5);
+                            }
+                        }
+                    }
+                    
+                    if (this.invulnerable > 0) this.invulnerable--;
+                    
+                    super.update();
+                }
+                
+                checkBatDrain(game) {
+                    let nearest = null;
+                    let minDist = Infinity;
+                    
+                    for (let v of game.villagers) {
+                        if (v.state === 'hiding') continue;
+                        const d = this.distanceTo(v);
+                        if (d < minDist && d < 60) {
+                            minDist = d;
+                            nearest = v;
+                        }
+                    }
+                    
+                    if (nearest) {
+                        this.draining = nearest;
+                        nearest.health -= 2;
+                        
+                        ctx.strokeStyle = '#dc143c';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(this.x, this.y);
+                        ctx.lineTo(nearest.x, nearest.y);
+                        ctx.stroke();
+                        
+                        const now = Date.now();
+                        if (now - this.lastDrainSound > 200) {
+                            playSound('drain');
+                            this.lastDrainSound = now;
+                        }
+                        
+                        if (Math.random() < 0.3) {
+                            game.addParticles(
+                                this.x + (nearest.x - this.x) * 0.5,
+                                this.y + (nearest.y - this.y) * 0.5,
+                                '#dc143c', 2
+                            );
+                        }
+                        
+                        if (nearest.health <= 0) {
+                            nearest.convert(game);
+                            this.draining = null;
+                        }
+                    } else {
+                        this.draining = null;
+                    }
+                }
+                
+                checkCollision(house) {
+                    return this.x + this.size/2 > house.x - house.width/2 &&
+                           this.x - this.size/2 < house.x + house.width/2 &&
+                           this.y + this.size/2 > house.y - house.height/2 &&
+                           this.y - this.size/2 < house.y + house.height/2;
+                }
+                
+                resolveCollision(house) {
+                    const dx = this.x - house.x;
+                    const dy = this.y - house.y;
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+                    
+                    if (absDx > absDy) {
+                        this.x = dx > 0 ? house.x + house.width/2 + this.size/2 : house.x - house.width/2 - this.size/2;
+                        this.vx = 0;
+                    } else {
+                        this.y = dy > 0 ? house.y + house.height/2 + this.size/2 : house.y - house.height/2 - this.size/2;
+                        this.vy = 0;
+                    }
+                }
+                
+                draw() {
+                    if (this.invulnerable > 0 && Math.floor(Date.now() / 50) % 2) return;
+                    
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.shadowBlur = 0;
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    
+                    if (this.batMode) {
+                        ctx.fillStyle = 'rgba(138, 43, 226, 0.2)';
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, 25, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    ctx.font = `${this.size}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(this.emoji, this.x, this.y);
+                    
+                    if (!this.batMode && this.draining) {
+                        ctx.strokeStyle = '#dc143c';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(this.x, this.y);
+                        ctx.lineTo(this.draining.x, this.draining.y);
+                        ctx.stroke();
+                        
+                        if (Math.random() < 0.3) {
+                            game.addParticles(
+                                this.x + (this.draining.x - this.x) * 0.5,
+                                this.y + (this.draining.y - this.y) * 0.5,
+                                '#dc143c', 2
+                            );
+                        }
+                    }
+                    
+                    ctx.restore();
+                }
+            }
+            
+            class Villager extends Entity {
+                constructor(x, y) {
+                    super(x, y, '👤', 24);
+                    this.health = 100;
+                    this.maxHealth = 100;
+                    this.speed = 1.5;
+                    this.state = 'wander';
+                    this.stateTimer = 0;
+                    this.targetX = x;
+                    this.targetY = y;
+                    this.hasGarlic = false;
+                    this.crossbowAmmo = 0;
+                    this.hideHouse = null;
+                    this.wanderTimer = 0;
+                    this.visible = true;
+                    this.stallTimer = 0;
+                    this.isConverting = false;
+                    this.cornerStuckTimer = 0;
+                }
+                
+                update(game) {
+                    const distToDracula = this.distanceTo(game.dracula);
+                    const nearestVampire = game.getNearestVampire(this);
+                    const distToVampire = nearestVampire ? this.distanceTo(nearestVampire) : Infinity;
+                    const distToBat = (game.dracula && game.dracula.batMode) ? this.distanceTo(game.dracula) : Infinity;
+                    
+                    const speed = Math.hypot(this.vx, this.vy);
+                    if (speed < 0.1) {
+                        this.stallTimer++;
+                    } else {
+                        this.stallTimer = 0;
+                    }
+                    
+                    const cornerEscape = this.checkCornerStuck();
+                    if (cornerEscape) {
+                        this.cornerStuckTimer++;
+                        if (this.cornerStuckTimer > 10) {
+                            this.vx = cornerEscape.x * this.speed * 2;
+                            this.vy = cornerEscape.y * this.speed * 2;
+                            this.state = 'wander';
+                            this.wanderTimer = 60;
+                            this.targetX = canvas.width / 2 + (Math.random() - 0.5) * 200;
+                            this.targetY = canvas.height / 2 + (Math.random() - 0.5) * 200;
+                        }
+                    } else {
+                        this.cornerStuckTimer = 0;
+                    }
+                    
+                    if (this.stallTimer > 600) {
+                        this.stallTimer = 0;
+                        this.state = 'wander';
+                        this.wanderTimer = 0;
+                        const angle = Math.random() * Math.PI * 2;
+                        this.targetX = this.x + Math.cos(angle) * 200;
+                        this.targetY = this.y + Math.sin(angle) * 200;
+                        this.targetX = Math.max(50, Math.min(canvas.width - 50, this.targetX));
+                        this.targetY = Math.max(50, Math.min(canvas.height - 50, this.targetY));
+                    }
+                    
+                    switch(this.state) {
+                        case 'wander':
+                            if (distToDracula < 150 || distToVampire < 150 || distToBat < 150) {
+                                this.state = 'flee';
+                            } else if (Math.random() < 0.005) {
+                                const house = game.getNearestHouseWithSpace(this);
+                                if (house && this.distanceTo(house) < 300) {
+                                    this.state = 'hide';
+                                    this.hideHouse = house;
+                                    house.villagersInside.push(this);
+                                }
+                            }
+                            
+                            this.wanderTimer--;
+                            if (this.wanderTimer <= 0) {
+                                this.targetX = Math.random() * (canvas.width - 100) + 50;
+                                this.targetY = Math.random() * (canvas.height - 100) + 50;
+                                this.wanderTimer = 60 + Math.random() * 60;
+                            }
+                            this.moveToward(this.targetX, this.targetY);
+                            break;
+                            
+                        case 'flee':
+                            let fleeX = this.x;
+                            let fleeY = this.y;
+                            
+                            let closestThreat = null;
+                            let closestDist = Infinity;
+                            
+                            if (distToDracula < closestDist && !game.dracula.batMode) {
+                                closestDist = distToDracula;
+                                closestThreat = game.dracula;
+                            }
+                            if (distToBat < closestDist) {
+                                closestDist = distToBat;
+                                closestThreat = game.dracula;
+                            }
+                            if (nearestVampire && distToVampire < closestDist) {
+                                closestDist = distToVampire;
+                                closestThreat = nearestVampire;
+                            }
+                            
+                            if (closestThreat) {
+                                fleeX = this.x + (this.x - closestThreat.x) * 3;
+                                fleeY = this.y + (this.y - closestThreat.y) * 3;
+                            } else {
+                                this.state = 'wander';
+                                this.wanderTimer = 0;
+                            }
+                            
+                            this.moveToward(fleeX, fleeY, 1.5);
+                            
+                            if (distToDracula > 200 && distToVampire > 200 && distToBat > 200) {
+                                this.state = 'wander';
+                            }
+                            break;
+                            
+                        case 'hide':
+                            if (this.hideHouse) {
+                                this.moveToward(this.hideHouse.x, this.hideHouse.y, 2);
+                                if (this.distanceTo(this.hideHouse) < 60) {
+                                    this.state = 'hiding';
+                                    this.stateTimer = 300;
+                                    this.visible = false;
+                                    this.x = this.hideHouse.x;
+                                    this.y = this.hideHouse.y;
+                                    this.stallTimer = 0;
+                                }
+                            } else {
+                                this.state = 'wander';
+                            }
+                            break;
+                            
+                        case 'hiding':
+                            this.stateTimer--;
+                            if (this.stateTimer <= 0) {
+                                this.state = 'armed';
+                                this.crossbowAmmo = 3;
+                                this.visible = true;
+                                if (this.hideHouse) {
+                                    const index = this.hideHouse.villagersInside.indexOf(this);
+                                    if (index > -1) {
+                                        this.hideHouse.villagersInside.splice(index, 1);
+                                    }
+                                    const angle = Math.random() * Math.PI * 2;
+                                    this.x = this.hideHouse.x + Math.cos(angle) * 80;
+                                    this.y = this.hideHouse.y + Math.sin(angle) * 80;
+                                    this.hideHouse = null;
+                                }
+                            }
+                            break;
+                            
+                        case 'armed':
+                            if (this.crossbowAmmo > 0) {
+                                const target = (game.dracula.batMode && distToDracula < 250) ? game.dracula : 
+                                              (!game.dracula.batMode && distToDracula < 250) ? game.dracula : null;
+                                
+                                if (target && Math.random() < 0.03) {
+                                    game.shootStake(this, target);
+                                    this.crossbowAmmo--;
+                                } else if (nearestVampire && this.distanceTo(nearestVampire) < 250 && Math.random() < 0.03) {
+                                    game.shootStake(this, nearestVampire);
+                                    this.crossbowAmmo--;
+                                }
+                            } else {
+                                this.state = 'wander';
+                            }
+                            
+                            if (distToDracula < 100 || distToBat < 100) {
+                                this.state = 'flee';
+                            }
+                            break;
+                    }
+                    
+                    if (!this.hasGarlic && this.state !== 'armed' && this.state !== 'hiding') {
+                        for (let garlic of game.garlics) {
+                            if (!garlic.carried && this.distanceTo(garlic) < 40) {
+                                this.hasGarlic = true;
+                                garlic.carried = true;
+                                garlic.carrier = this;
+                                setTimeout(() => {
+                                    this.hasGarlic = false;
+                                    garlic.carried = false;
+                                    garlic.carrier = null;
+                                }, 10000);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (this.hasGarlic && (distToDracula < 50 || distToBat < 50)) {
+                        game.dracula.blood = Math.max(0, game.dracula.blood - 0.2);
+                    }
+                    
+                    if (distToDracula < 60 && !game.dracula.batMode && this.state !== 'hiding') {
+                        if (game.dracula.draining === null || game.dracula.draining === this) {
+                            game.dracula.draining = this;
+                            this.health -= 2;
+                            game.dracula.blood = Math.min(100, game.dracula.blood + 0.5);
+                            game.score += 1;
+                            playSound('drain');
+                            
+                            if (this.health <= 0 && !this.isConverting) {
+                                this.convert(game);
+                            }
+                        }
+                    } else if (game.dracula.draining === this && !game.dracula.batMode) {
+                        game.dracula.draining = null;
+                    }
+                    
+                    if (this.visible) {
+                        this.x += this.vx * this.speed;
+                        this.y += this.vy * this.speed;
+                        
+                        const margin = this.size;
+                        const softMargin = margin * 3;
+                        
+                        if (this.x < softMargin) {
+                            this.vx += 0.5;
+                        } else if (this.x > canvas.width - softMargin) {
+                            this.vx -= 0.5;
+                        }
+                        
+                        if (this.y < softMargin) {
+                            this.vy += 0.5;
+                        } else if (this.y > canvas.height - softMargin) {
+                            this.vy -= 0.5;
+                        }
+                        
+                        this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+                        this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+                    }
+                }
+                
+                moveToward(tx, ty, speedMult = 1) {
+                    const dx = tx - this.x;
+                    const dy = ty - this.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 1) {
+                        this.vx = (dx / dist) * speedMult;
+                        this.vy = (dy / dist) * speedMult;
+                    } else {
+                        this.vx = 0;
+                        this.vy = 0;
+                        if (this.state === 'wander') {
+                            this.wanderTimer = 0;
+                        }
+                    }
+                }
+                
+                convert(game) {
+                    if (this.isConverting || this.markedForDeletion) return;
+                    this.isConverting = true;
+                    
+                    this.markedForDeletion = true;
+                    if (game.dracula.draining === this) {
+                        game.dracula.draining = null;
+                    }
+                    if (this.hideHouse) {
+                        const index = this.hideHouse.villagersInside.indexOf(this);
+                        if (index > -1) {
+                            this.hideHouse.villagersInside.splice(index, 1);
+                        }
+                    }
+                    
+                    const newVampire = new Vampire(this.x, this.y);
+                    game.vampires.push(newVampire);
+                    
+                    game.converted++;
+                    game.score += 100;
+                    playSound('convert');
+                    game.addParticles(this.x, this.y, '#dc143c', 20);
+                    game.addParticles(this.x, this.y, '#8a2be2', 10);
+                    game.showNotification('+100 Converted!');
+                }
+                
+                draw() {
+                    if (!this.visible) return;
+                    
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.shadowBlur = 0;
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    
+                    ctx.font = `${this.size}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(this.emoji, this.x, this.y);
+                    
+                    if (this.hasGarlic) {
+                        ctx.font = '16px Arial';
+                        ctx.fillText('🧄', this.x + 10, this.y - 8);
+                    }
+                    
+                    if (this.state === 'armed') {
+                        ctx.font = '16px Arial';
+                        ctx.fillText('🏹', this.x - 10, this.y - 8);
+                    }
+                    
+                    if (this.health < this.maxHealth) {
+                        const barWidth = 24;
+                        const barHeight = 3;
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(this.x - barWidth/2, this.y - this.size/2 - 8, barWidth, barHeight);
+                        
+                        const healthPercent = this.health / this.maxHealth;
+                        ctx.fillStyle = healthPercent > 0.5 ? '#0f0' : healthPercent > 0.25 ? '#ff0' : '#f00';
+                        ctx.fillRect(this.x - barWidth/2, this.y - this.size/2 - 8, barWidth * healthPercent, barHeight);
+                    }
+                    
+                    ctx.restore();
+                }
+            }
+            
+            class Vampire extends Entity {
+                constructor(x, y) {
+                    super(x, y, '🧛‍♂️', 26);
+                    this.speed = 2;
+                    this.target = null;
+                    this.slowed = false;
+                    this.stallTimer = 0;
+                }
+                
+                update(game) {
+                    this.slowed = false;
+                    for (let garlic of game.garlics) {
+                        if (this.distanceTo(garlic) < 40) {
+                            this.slowed = true;
+                            break;
+                        }
+                    }
+                    
+                    const actualSpeed = this.slowed ? 0.8 : this.speed;
+                    
+                    let nearest = null;
+                    let minDist = Infinity;
+                    for (let v of game.villagers) {
+                        if (v.state === 'hiding') continue;
+                        const d = this.distanceTo(v);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearest = v;
+                        }
+                    }
+                    
+                    const currentSpeed = Math.hypot(this.vx, this.vy);
+                    if (currentSpeed < 0.1) {
+                        this.stallTimer++;
+                    } else {
+                        this.stallTimer = 0;
+                    }
+                    
+                    if (this.stallTimer > 600) {
+                        this.stallTimer = 0;
+                        const angle = Math.random() * Math.PI * 2;
+                        this.vx = Math.cos(angle) * actualSpeed;
+                        this.vy = Math.sin(angle) * actualSpeed;
+                    }
+                    
+                    if (nearest && minDist < 400) {
+                        const dx = nearest.x - this.x;
+                        const dy = nearest.y - this.y;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist > 0) {
+                            this.vx = (dx / dist) * actualSpeed;
+                            this.vy = (dy / dist) * actualSpeed;
+                        }
+                        
+                        if (dist < 40) {
+                            nearest.health -= 3;
+                            if (nearest.health <= 0 && !nearest.isConverting) {
+                                nearest.convert(game);
+                                game.score += 50;
+                            }
+                        }
+                    } else {
+                        if (Math.random() < 0.02 || currentSpeed < 0.1) {
+                            const angle = Math.random() * Math.PI * 2;
+                            this.vx = Math.cos(angle) * actualSpeed * 0.5;
+                            this.vy = Math.sin(angle) * actualSpeed * 0.5;
+                        }
+                    }
+                    
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    
+                    const margin = this.size;
+                    const softMargin = margin * 3;
+                    
+                    if (this.x < softMargin) {
+                        this.vx += 0.5;
+                    } else if (this.x > canvas.width - softMargin) {
+                        this.vx -= 0.5;
+                    }
+                    
+                    if (this.y < softMargin) {
+                        this.vy += 0.5;
+                    } else if (this.y > canvas.height - softMargin) {
+                        this.vy -= 0.5;
+                    }
+                    
+                    this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+                    this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+                }
+                
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.shadowBlur = 0;
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    
+                    ctx.font = `${this.size}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(this.emoji, this.x, this.y);
+                    
+                    if (this.slowed) {
+                        ctx.font = '12px Arial';
+                        ctx.fillText('🐌', this.x + 10, this.y - 10);
+                    }
+                    
+                    ctx.restore();
+                }
+            }
+            
+            class House {
+                constructor(x, y) {
+                    this.x = x;
+                    this.y = y;
+                    this.width = 80;
+                    this.height = 80;
+                    this.breathPhase = Math.random() * Math.PI * 2;
+                    this.villagersInside = [];
+                }
+                
+                update() {
+                    this.breathPhase += 0.02;
+                }
+                
+                draw() {
+                    const breath = Math.sin(this.breathPhase) * 2;
+                    
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.translate(this.x, this.y);
+                    
+                    ctx.fillStyle = '#4a4a6a';
+                    ctx.fillRect(-this.width/2 - breath, -this.height/2 - breath, this.width + breath*2, this.height + breath*2);
+                    
+                    ctx.fillStyle = '#2a2a4a';
+                    ctx.beginPath();
+                    ctx.moveTo(-this.width/2 - 10, -this.height/2);
+                    ctx.lineTo(0, -this.height/2 - 30);
+                    ctx.lineTo(this.width/2 + 10, -this.height/2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#1a1a2e';
+                    ctx.fillRect(-15, 10, 30, 30);
+                    
+                    if (this.villagersInside.length > 0) {
+                        ctx.fillStyle = '#ffcc00';
+                        ctx.shadowColor = '#ffcc00';
+                        ctx.shadowBlur = 10;
+                    } else {
+                        ctx.fillStyle = '#333';
+                        ctx.shadowBlur = 0;
+                    }
+                    
+                    ctx.fillRect(-25, -20, 20, 20);
+                    ctx.fillRect(5, -20, 20, 20);
+                    
+                    ctx.restore();
+                }
+            }
+            
+            class Garlic {
+                constructor(x, y) {
+                    this.x = x;
+                    this.y = y;
+                    this.size = 20;
+                    this.carried = false;
+                    this.carrier = null;
+                    this.bobPhase = Math.random() * Math.PI * 2;
+                }
+                
+                update() {
+                    this.bobPhase += 0.05;
+                    if (this.carried && this.carrier) {
+                        this.x = this.carrier.x;
+                        this.y = this.carrier.y;
+                    }
+                }
+                
+                draw() {
+                    if (this.carried) return;
+                    
+                    const bob = Math.sin(this.bobPhase) * 3;
+                    
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.shadowColor = '#ffffff';
+                    ctx.shadowBlur = 15;
+                    ctx.font = 'bold 26px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🧄', this.x, this.y + bob);
+                    ctx.restore();
+                }
+            }
+            
+            class Tree {
+                constructor(x, y) {
+                    this.x = x;
+                    this.y = y;
+                    this.size = 40;
+                    this.swayPhase = Math.random() * Math.PI * 2;
+                }
+                
+                update() {
+                    this.swayPhase += 0.02;
+                }
+                
+                draw() {
+                    const sway = Math.sin(this.swayPhase) * 3;
+                    
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.shadowBlur = 0;
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    ctx.translate(this.x + sway, this.y);
+                    ctx.font = '36px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText('🌲', 0, 0);
+                    ctx.restore();
+                }
+            }
+            
+            class Stake {
+                constructor(x, y, target) {
+                    this.x = x;
+                    this.y = y;
+                    this.target = target;
+                    this.speed = 7;
+                    this.size = 10;
+                    const dx = target.x - x;
+                    const dy = target.y - y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 0) {
+                        this.vx = (dx / dist) * this.speed;
+                        this.vy = (dy / dist) * this.speed;
+                    } else {
+                        this.vx = 0;
+                        this.vy = 0;
+                    }
+                    this.markedForDeletion = false;
+                    this.rotation = Math.atan2(this.vy, this.vx);
+                }
+                
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    
+                    if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                        this.markedForDeletion = true;
+                    }
+                    
+                    if (!this.markedForDeletion && this.target) {
+                        const dist = Math.hypot(this.x - this.target.x, this.y - this.target.y);
+                        if (dist < this.target.size) {
+                            this.markedForDeletion = true;
+                            if (this.target instanceof Dracula) {
+                                this.target.blood = Math.max(0, this.target.blood - 10);
+                                playSound('hit');
+                            } else if (this.target instanceof Vampire) {
+                                this.target.markedForDeletion = true;
+                                playSound('hit');
+                            }
+                        }
+                    }
+                }
+                
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = 1.0;
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(this.rotation);
+                    
+                    ctx.shadowColor = '#ffd700';
+                    ctx.shadowBlur = 10;
+                    ctx.fillStyle = '#ffec8b';
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(-8, -3);
+                    ctx.lineTo(8, 0);
+                    ctx.lineTo(-8, 3);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#fffacd';
+                    ctx.beginPath();
+                    ctx.moveTo(8, 0);
+                    ctx.lineTo(-2, -2);
+                    ctx.lineTo(-2, 2);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.restore();
+                }
+            }
+            
+            class Game {
+                constructor() {
+                    this.level = 1;
+                    this.score = 0;
+                    this.converted = 0;
+                    this.state = 'menu';
+                    this.savedBlood = 25;
+                    this.maxVillagers = 25;
+                    
+                    this.dracula = null;
+                    this.villagers = [];
+                    this.vampires = [];
+                    this.houses = [];
+                    this.garlics = [];
+                    this.trees = [];
+                    this.stakes = [];
+                    this.particles = [];
+                    
+                    this.input = {
+                        keys: new Set(),
+                        touch: { active: false, x: null, y: null, double: false }
+                    };
+                    
+                    this.setupInput();
+                    this.setupButtons();
+                    this.loop = this.loop.bind(this);
+                }
+                
+                setupButtons() {
+                    const getBtn = (id) => document.getElementById(id) || document.querySelector('#' + id);
+                    
+                    const startBtn = getBtn('startBtn');
+                    const restartBtn = getBtn('restartBtn');
+                    const menuBtn = getBtn('menuBtn');
+                    const playAgainBtn = getBtn('playAgainBtn');
+                    const nextLevelBtn = getBtn('nextLevelBtn');
+                    
+                    const attachHandler = (btn, handler) => {
+                        if (!btn) {
+                            console.log('Button not found:', btn);
+                            return;
+                        }
+                        
+                        btn.onclick = null;
+                        btn.ontouchend = null;
+                        btn.ontouchstart = null;
+                        
+                        btn.onclick = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Button clicked:', btn.id);
+                            handler();
+                            return false;
+                        };
+                        
+                        btn.ontouchend = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Button touched:', btn.id);
+                            handler();
+                            return false;
+                        };
+                        
+                        btn.ontouchstart = (e) => {
+                            e.preventDefault();
+                        };
+                        
+                        console.log('Handler attached to:', btn.id);
+                    };
+                    
+                    if (startBtn) attachHandler(startBtn, () => this.start());
+                    if (restartBtn) attachHandler(restartBtn, () => this.restart());
+                    if (menuBtn) attachHandler(menuBtn, () => this.showMenu());
+                    if (playAgainBtn) attachHandler(playAgainBtn, () => this.restart());
+                    if (nextLevelBtn) attachHandler(nextLevelBtn, () => this.nextLevel());
+                }
+                
+                setupInput() {
+                    window.addEventListener('keydown', (e) => {
+                        this.input.keys.add(e.key);
+                        if (e.key === ' ') e.preventDefault();
+                    });
+                    
+                    window.addEventListener('keyup', (e) => {
+                        this.input.keys.delete(e.key);
+                    });
+                    
+                    let lastTouchTime = 0;
+                    
+                    canvas.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        this.input.touch.active = true;
+                        this.input.touch.x = touch.clientX;
+                        this.input.touch.y = touch.clientY;
+                        
+                        const now = Date.now();
+                        if (now - lastTouchTime < 300) {
+                            this.input.touch.double = true;
+                        }
+                        lastTouchTime = now;
+                    });
+                    
+                    canvas.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        this.input.touch.x = touch.clientX;
+                        this.input.touch.y = touch.clientY;
+                    });
+                    
+                    canvas.addEventListener('touchend', () => {
+                        this.input.touch.active = false;
+                        this.input.touch.x = null;
+                        this.input.touch.y = null;
+                        setTimeout(() => this.input.touch.double = false, 100);
+                    });
+                    
+                    canvas.addEventListener('mousedown', (e) => {
+                        this.input.touch.active = true;
+                        this.input.touch.x = e.clientX;
+                        this.input.touch.y = e.clientY;
+                    });
+                    
+                    canvas.addEventListener('mousemove', (e) => {
+                        if (this.input.touch.active) {
+                            this.input.touch.x = e.clientX;
+                            this.input.touch.y = e.clientY;
+                        }
+                    });
+                    
+                    canvas.addEventListener('mouseup', () => {
+                        this.input.touch.active = false;
+                    });
+                }
+                
+                start() {
+                    console.log('Game.start() called');
+                    try {
+                        initAudio();
+                        stopMenuMusic();
+                        startGameMusic();
+                        
+                        const menuScreen = document.getElementById('menuScreen');
+                        if (menuScreen) menuScreen.classList.add('hidden');
+                        
+                        // Only reset savedBlood on fresh game start
+                        if (this.level === 1 && this.score === 0 && this.savedBlood === 25) {
+                            this.savedBlood = 25;
+                        }
+                        
+                        this.startLevel();
+                        
+                        requestAnimationFrame(this.loop);
+                    } catch (e) {
+                        console.error('ERROR in start():', e);
+                    }
+                }
+                
+                restart() {
+                    const gameOverScreen = document.getElementById('gameOverScreen');
+                    const winScreen = document.getElementById('winScreen');
+                    if (gameOverScreen) gameOverScreen.classList.add('hidden');
+                    if (winScreen) winScreen.classList.add('hidden');
+                    
+                    stopGameMusic();
+                    startGameMusic();
+                    this.level = 1;
+                    this.score = 0;
+                    this.savedBlood = 25;
+                    this.startLevel();
+                }
+                
+                showMenu() {
+                    const gameOverScreen = document.getElementById('gameOverScreen');
+                    const menuScreen = document.getElementById('menuScreen');
+                    if (gameOverScreen) gameOverScreen.classList.add('hidden');
+                    if (menuScreen) menuScreen.classList.remove('hidden');
+                    
+                    stopGameMusic();
+                    startMenuMusic();
+                    this.state = 'menu';
+                }
+                
+                getNumHousesForLevel(level) {
+                    const minHouses = 3;
+                    const maxHouses = 10;
+                    const progress = (level - 1) / 19;
+                    return Math.floor(minHouses + progress * (maxHouses - minHouses));
+                }
+                
+                getNumVillagersForLevel(level) {
+                    const minVillagers = 5;
+                    const maxVillagers = 25;
+                    const progress = (level - 1) / 19;
+                    return Math.floor(minVillagers + progress * (maxVillagers - minVillagers));
+                }
+                
+                startLevel() {
+                    resize();
+                    
+                    this.state = 'playing';
+                    this.converted = 0;
+                    
+                    let startingBlood;
+                    if (this.savedBlood > 100) {
+                        startingBlood = 25;
+                    } else {
+                        startingBlood = this.savedBlood;
+                    }
+                    
+                    this.dracula = new Dracula(canvas.width/2, canvas.height/2, startingBlood);
+                    
+                    this.villagers = [];
+                    this.vampires = [];
+                    this.houses = [];
+                    this.garlics = [];
+                    this.trees = [];
+                    this.stakes = [];
+                    this.particles = [];
+                    
+                    const numHouses = this.getNumHousesForLevel(this.level);
+                    const numVillagers = this.getNumVillagersForLevel(this.level);
+                    const numGarlics = Math.min(2 + this.level, 15);
+                    const numTrees = Math.floor(5 + this.level * 0.5);
+                    
+                    for (let i = 0; i < numHouses; i++) {
+                        let x, y, valid, attempts = 0;
+                        do {
+                            x = 100 + Math.random() * (canvas.width - 200);
+                            y = 100 + Math.random() * (canvas.height - 200);
+                            valid = true;
+                            if (Math.hypot(x - canvas.width/2, y - canvas.height/2) < 150) valid = false;
+                            for (let h of this.houses) {
+                                if (Math.hypot(x - h.x, y - h.y) < 150) valid = false;
+                            }
+                            if (x < 60 || x > canvas.width - 60 || y < 60 || y > canvas.height - 60) valid = false;
+                            attempts++;
+                        } while (!valid && attempts < 100);
+                        
+                        if (valid) {
+                            this.houses.push(new House(x, y));
+                        }
+                    }
+                    
+                    if (this.houses.length === 0) {
+                        const safeX = Math.max(150, Math.min(canvas.width - 150, canvas.width * 0.2));
+                        const safeY = Math.max(150, Math.min(canvas.height - 150, canvas.height * 0.2));
+                        this.houses.push(new House(safeX, safeY));
+                    }
+                    
+                    for (let i = 0; i < numGarlics; i++) {
+                        let x, y, valid, attempts = 0;
+                        do {
+                            x = 50 + Math.random() * (canvas.width - 100);
+                            y = 50 + Math.random() * (canvas.height - 100);
+                            valid = true;
+                            for (let h of this.houses) {
+                                if (Math.hypot(x - h.x, y - h.y) < 80) valid = false;
+                            }
+                            attempts++;
+                        } while (!valid && attempts < 100);
+                        
+                        if (valid) this.garlics.push(new Garlic(x, y));
+                    }
+                    
+                    for (let i = 0; i < numTrees; i++) {
+                        const x = 40 + Math.random() * (canvas.width - 80);
+                        const y = 40 + Math.random() * (canvas.height - 80);
+                        this.trees.push(new Tree(x, y));
+                    }
+                    
+                    for (let i = 0; i < numVillagers; i++) {
+                        let x, y, valid, attempts = 0;
+                        do {
+                            x = 50 + Math.random() * (canvas.width - 100);
+                            y = 50 + Math.random() * (canvas.height - 100);
+                            valid = true;
+                            if (Math.hypot(x - canvas.width/2, y - canvas.height/2) < 150) valid = false;
+                            for (let h of this.houses) {
+                                if (Math.hypot(x - h.x, y - h.y) < 70) valid = false;
+                            }
+                            for (let v of this.villagers) {
+                                if (Math.hypot(x - v.x, y - v.y) < 40) valid = false;
+                            }
+                            attempts++;
+                        } while (!valid && attempts < 100);
+                        
+                        if (valid) {
+                            this.villagers.push(new Villager(x, y));
+                        }
+                    }
+                    
+                    this.updateUI();
+                    const levelComplete = document.getElementById('levelComplete');
+                    if (levelComplete) levelComplete.classList.add('hidden');
+                }
+                
+                getNearestHouseWithSpace(entity) {
+                    let nearest = null;
+                    let minDist = Infinity;
+                    for (let h of this.houses) {
+                        if (h.villagersInside.length >= 3) continue;
+                        
+                        const d = entity.distanceTo(h);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearest = h;
+                        }
+                    }
+                    return nearest;
+                }
+                
+                nextLevel() {
+                    if (this.dracula) {
+                        if (this.dracula.batMode) {
+                            this.savedBlood = 100;
+                        } else {
+                            this.savedBlood = this.dracula.blood;
+                        }
+                    }
+                    
+                    const levelComplete = document.getElementById('levelComplete');
+                    if (levelComplete) levelComplete.classList.add('hidden');
+                    
+                    if (this.level >= 20) {
+                        this.win();
+                    } else {
+                        this.level++;
+                        this.startLevel();
+                    }
+                }
+                
+                win() {
+                    this.state = 'win';
+                    stopGameMusic();
+                    const winScore = document.getElementById('winScore');
+                    const winScreen = document.getElementById('winScreen');
+                    if (winScore) winScore.textContent = this.score;
+                    if (winScreen) winScreen.classList.remove('hidden');
+                    playSound('win');
+                }
+                
+                gameOver(reason) {
+                    this.state = 'gameOver';
+                    stopGameMusic();
+                    const gameOverReason = document.getElementById('gameOverReason');
+                    const finalScore = document.getElementById('finalScore');
+                    const gameOverScreen = document.getElementById('gameOverScreen');
+                    if (gameOverReason) gameOverReason.textContent = reason;
+                    if (finalScore) finalScore.textContent = this.score;
+                    if (gameOverScreen) gameOverScreen.classList.remove('hidden');
+                }
+                
+                shootStake(from, to) {
+                    this.stakes.push(new Stake(from.x, from.y, to));
+                }
+                
+                getNearestHouse(entity) {
+                    let nearest = null;
+                    let minDist = Infinity;
+                    for (let h of this.houses) {
+                        const d = entity.distanceTo(h);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearest = h;
+                        }
+                    }
+                    return nearest;
+                }
+                
+                getNearestVampire(entity) {
+                    let nearest = null;
+                    let minDist = Infinity;
+                    for (let v of this.vampires) {
+                        const d = entity.distanceTo(v);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearest = v;
+                        }
+                    }
+                    return nearest;
+                }
+                
+                addParticles(x, y, color, count) {
+                    for (let i = 0; i < count; i++) {
+                        this.particles.push(new Particle(x, y, color, 5, 30 + Math.random() * 20));
+                    }
+                }
+                
+                showNotification(text) {
+                    const notif = document.createElement('div');
+                    notif.className = 'notification';
+                    notif.textContent = text;
+                    document.body.appendChild(notif);
+                    setTimeout(() => notif.remove(), 2000);
+                }
+                
+                updateUI() {
+                    const levelNum = document.getElementById('levelNum');
+                    const scoreEl = document.getElementById('score');
+                    const convertedEl = document.getElementById('converted');
+                    const totalVillagersEl = document.getElementById('totalVillagers');
+                    
+                    if (levelNum) levelNum.textContent = this.level;
+                    if (scoreEl) scoreEl.textContent = this.score;
+                    if (convertedEl) convertedEl.textContent = this.converted;
+                    if (totalVillagersEl) totalVillagersEl.textContent = this.villagers.length + this.converted;
+                    
+                    const bloodFill = document.getElementById('bloodFill');
+                    const batFill = document.getElementById('batModeFill');
+                    const bloodPercent = document.getElementById('bloodPercent');
+                    const batModeIndicator = document.getElementById('batModeIndicator');
+                    
+                    if (this.dracula) {
+                        if (bloodFill) bloodFill.style.width = this.dracula.blood + '%';
+                        if (bloodPercent) bloodPercent.textContent = Math.floor(this.dracula.blood);
+                        
+                        if (this.dracula.batMode) {
+                            if (batFill) batFill.style.width = (this.dracula.batModeTimer / 1200 * 100) + '%';
+                            if (batModeIndicator) batModeIndicator.style.display = 'flex';
+                        } else {
+                            if (batFill) batFill.style.width = '0%';
+                            if (batModeIndicator) batModeIndicator.style.display = 'none';
+                        }
+                    }
+                }
+                
+                resolveEntityCollisions() {
+                    for (let i = 0; i < this.villagers.length; i++) {
+                        for (let j = i + 1; j < this.villagers.length; j++) {
+                            const v1 = this.villagers[i];
+                            const v2 = this.villagers[j];
+                            if (v1.visible && v2.visible && v1.overlapsWith(v2)) {
+                                v1.pushAwayFrom(v2, 1.5);
+                                v2.pushAwayFrom(v1, 1.5);
+                            }
+                        }
+                    }
+                    
+                    for (let i = 0; i < this.vampires.length; i++) {
+                        for (let j = i + 1; j < this.vampires.length; j++) {
+                            const v1 = this.vampires[i];
+                            const v2 = this.vampires[j];
+                            if (v1.overlapsWith(v2)) {
+                                v1.pushAwayFrom(v2, 1.5);
+                                v2.pushAwayFrom(v1, 1.5);
+                            }
+                        }
+                    }
+                    
+                    for (let villager of this.villagers) {
+                        for (let vampire of this.vampires) {
+                            if (villager.visible && villager.overlapsWith(vampire)) {
+                                villager.pushAwayFrom(vampire, 1.5);
+                                vampire.pushAwayFrom(villager, 1.5);
+                            }
+                        }
+                    }
+                    
+                    if (this.dracula) {
+                        for (let villager of this.villagers) {
+                            if (villager.visible && this.dracula.overlapsWith(villager)) {
+                                this.dracula.pushAwayFrom(villager, 1.2);
+                                villager.pushAwayFrom(this.dracula, 1.2);
+                            }
+                        }
+                        for (let vampire of this.vampires) {
+                            if (this.dracula.overlapsWith(vampire)) {
+                                this.dracula.pushAwayFrom(vampire, 1.2);
+                                vampire.pushAwayFrom(this.dracula, 1.2);
+                            }
+                        }
+                    }
+                }
+                
+                update() {
+                    if (this.state !== 'playing') return;
+                    
+                    if (this.dracula) this.dracula.update(this.input, this);
+                    
+                    this.villagers.forEach(v => v.update(this));
+                    this.vampires.forEach(v => v.update(this));
+                    this.houses.forEach(h => h.update());
+                    this.garlics.forEach(g => g.update());
+                    this.trees.forEach(t => t.update());
+                    this.stakes.forEach(s => s.update());
+                    this.particles.forEach(p => p.update());
+                    
+                    this.resolveEntityCollisions();
+                    
+                    this.villagers = this.villagers.filter(v => !v.markedForDeletion);
+                    this.vampires = this.vampires.filter(v => !v.markedForDeletion);
+                    this.stakes = this.stakes.filter(s => !s.markedForDeletion);
+                    this.particles = this.particles.filter(p => p.life > 0);
+                    
+                    if (this.villagers.length === 0 && this.state === 'playing') {
+                        this.state = 'levelComplete';
+                        const levelScore = document.getElementById('levelScore');
+                        const levelComplete = document.getElementById('levelComplete');
+                        if (levelScore) levelScore.textContent = this.score;
+                        if (levelComplete) levelComplete.classList.remove('hidden');
+                        playSound('win');
+                    }
+                    
+                    if (this.dracula && this.dracula.blood <= 0 && !this.dracula.batMode && this.villagers.length > 0) {
+                        const accessibleVillager = this.villagers.some(v => {
+                            if (v.state === 'hiding') return false;
+                            return v.distanceTo(this.dracula) < 300;
+                        });
+                        
+                        const hasActiveMinions = this.vampires.length > 0;
+                        
+                        if (!accessibleVillager && !hasActiveMinions) {
+                            this.gameOver("Your blood ran dry with no victims in reach!");
+                        }
+                    }
+                    
+                    this.updateUI();
+                }
+                
+                draw() {
+                    const gradient = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width);
+                    gradient.addColorStop(0, '#1a1a2e');
+                    gradient.addColorStop(1, '#0f0f23');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    ctx.fillStyle = 'rgba(34, 139, 34, 0.08)';
+                    for (let i = 0; i < canvas.width; i += 40) {
+                        for (let j = 0; j < canvas.height; j += 40) {
+                            if ((Math.floor(i/40) + Math.floor(j/40)) % 2 === 0) {
+                                ctx.fillRect(i, j, 40, 40);
+                            }
+                        }
+                    }
+                    
+                    this.trees.forEach(t => t.draw());
+                    this.houses.forEach(h => h.draw());
+                    this.garlics.forEach(g => g.draw());
+                    this.vampires.forEach(v => v.draw());
+                    this.villagers.forEach(v => v.draw());
+                    this.stakes.forEach(s => s.draw());
+                    if (this.dracula) this.dracula.draw();
+                    this.particles.forEach(p => p.draw());
+                }
+                
+                loop() {
+                    this.update();
+                    this.draw();
+                    if (this.state === 'playing' || this.state === 'menu' || this.state === 'levelComplete') {
+                        requestAnimationFrame(this.loop);
+                    }
+                }
+            }
+            
+            // Create game instance and expose globally for debugging
+            window.game = new Game();
+            console.log('Game initialized:', window.game);
+        }
+    </script>
+</body>
+    </html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vampire Village - Dracula's Conquest</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        body {
+            background: #0f0f23;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #gameContainer {
+            position: absolute;
+            top: 70px;
+            left: 0;
+            right: 0;
+            bottom: 70px;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .hud {
+            position: absolute;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #8a2be2;
+            border-radius: 10px;
+            font-size: 14px;
+            text-shadow: 0 0 5px #8a2be2;
+            pointer-events: auto;
+        }
+        
+        #topHud {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: nowrap;
+            gap: 5px;
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+            border-top: none;
+            overflow: hidden;
+        }
+        
+        .hud-item {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            white-space: nowrap;
+            font-size: clamp(11px, 2.5vw, 14px);
+            padding: 0 5px;
+        }
+        
+        #bloodMeter {
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+            border-bottom: none;
+        }
+        
+        .meter-container {
+            width: 100%;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 2px solid #666;
+            position: relative;
+        }
+        
+        #bloodFill {
+            height: 100%;
+            width: 25%;
+            background: linear-gradient(90deg, #8b0000 0%, #dc143c 50%, #ff4444 100%);
+            transition: width 0.2s;
+            box-shadow: 0 0 20px rgba(220, 20, 60, 0.5);
+        }
+        
+        #batModeFill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #4b0082 0%, #8a2be2 50%, #da70d6 100%);
+            opacity: 0.8;
+        }
+        
+        .meter-label {
+            text-align: center;
+            margin-top: 5px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        #menuScreen, #gameOverScreen, #winScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 100;
+        }
+        
+        .title {
+            font-size: clamp(32px, 8vw, 48px);
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #8a2be2, 0 0 40px #dc143c;
+            animation: pulse 2s infinite;
+            text-align: center;
+            padding: 0 20px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .subtitle {
+            font-size: clamp(14px, 3vw, 18px);
+            margin-bottom: 30px;
+            color: #aaa;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.6;
+            padding: 0 20px;
+        }
+        
+        .btn {
+            padding: 15px 40px;
+            font-size: clamp(16px, 4vw, 20px);
+            background: linear-gradient(135deg, #8a2be2 0%, #dc143c 100%);
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 30px;
+            margin: 10px;
+            transition: all 0.3s;
+            font-family: inherit;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.5);
+            pointer-events: auto;
+            position: relative;
+            z-index: 101;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .btn:hover, .btn:active {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(220, 20, 60, 0.8);
+        }
+        
+        #startBtn {
+            pointer-events: auto !important;
+            cursor: pointer;
+            z-index: 101;
+        }
+        
+        .controls-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(138, 43, 226, 0.2);
+            border-radius: 10px;
+            border: 1px solid #8a2be2;
+            max-width: 500px;
+            margin-left: 20px;
+            margin-right: 20px;
+        }
+        
+        .controls-info h3 {
+            margin-bottom: 10px;
+            color: #da70d6;
+        }
+        
+        .hidden { display: none !important; }
+        
+        #levelComplete {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            border: 3px solid #ffd700;
+            text-align: center;
+            pointer-events: auto;
+            z-index: 50;
+            min-width: 300px;
+        }
+        
+        .notification {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(220, 20, 60, 0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            animation: floatUp 2s forwards;
+            pointer-events: none;
+            z-index: 20;
+            white-space: nowrap;
+        }
+        
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-50px); }
+        }
+        
+        .emoji {
+            font-size: 20px;
+        }
+        
+        #audioHint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #666;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        
+        #audioHint.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    
+    <div id="ui">
+        <div id="topHud" class="hud">
+            <div class="hud-item"><span class="emoji">🏰</span> Lvl: <span id="levelNum">1</span>/20</div>
+            <div class="hud-item"><span class="emoji">⭐</span> <span id="score">0</span></div>
+            <div class="hud-item"><span class="emoji">🧛</span> <span id="converted">0</span>/<span id="totalVillagers">0</span></div>
+            <div class="hud-item" id="batModeIndicator" style="display:none;"><span class="emoji">🦇</span> BAT!</div>
+        </div>
+        
+        <div id="bloodMeter" class="hud">
+            <div class="meter-container">
+                <div id="bloodFill"></div>
+                <div id="batModeFill"></div>
+            </div>
+            <div class="meter-label">Blood: <span id="bloodPercent">25</span>%</div>
+        </div>
+    </div>
+    
+    <div id="menuScreen">
+        <div class="title">🧛 Vampire Village</div>
+        <div class="subtitle">Play as Dracula and convert all villagers to reign over the night!<br>20 villages await your conquest.</div>
+        <button class="btn" id="startBtn" type="button">Start Game</button>
+        <div class="controls-info">
+            <h3>🎮 Controls</h3>
+            <p><strong>Desktop:</strong> WASD or Arrow Keys to move</p>
+            <p><strong>Mobile:</strong> Touch and drag to move</p>
+            <p><strong>Objective:</strong> Drain villagers (hold near them) to convert them!</p>
+            <p><strong>Bat Mode:</strong> Fill blood meter to transform - fly through walls!</p>
+            <p><strong>Warning:</strong> Avoid garlic 🧄 and stakes 🏹!</p>
+        </div>
+        <div id="audioHint">🔊 Click anywhere to enable audio</div>
+    </div>
+    
+    <div id="gameOverScreen" class="hidden">
+        <div class="title">💀 Game Over</div>
+        <div class="subtitle" id="gameOverReason">Your blood ran out!</div>
+        <div class="subtitle">Final Score: <span id="finalScore">0</span></div>
+        <button class="btn" id="restartBtn" type="button">Try Again</button>
+        <button class="btn" id="menuBtn" type="button">Main Menu</button>
+    </div>
+    
+    <div id="winScreen" class="hidden">
+        <div class="title">👑 Victory!</div>
+        <div class="subtitle">You have conquered all 20 villages and reign supreme over the night!</div>
+        <div class="subtitle">Final Score: <span id="winScore">0</span></div>
+        <button class="btn" id="playAgainBtn" type="button">Play Again</button>
+    </div>
+    
+    <div id="levelComplete" class="hidden">
+        <h2>🎉 Village Conquered!</h2>
+        <p>Score: <span id="levelScore">0</span></p>
+        <button class="btn" id="nextLevelBtn" type="button">Next Village</button>
+    </div>
+
+    <script>
         // CRITICAL FIX: Wrap everything in DOMContentLoaded
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initGame);
