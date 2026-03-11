@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Vampire Village</title>
     
-    <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ff0000">
+    
+    <link rel="icon" type="image/png" href="VV.png">
+    <link rel="apple-touch-icon" href="VV.png">
+    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    
-    <link rel="icon" type="image/png" href="icons/icon-192x192.png">
-    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     
     <style>
         :root {
@@ -94,12 +95,12 @@
     </div>
 
     <script type="module">
-        // Ensure the Service Worker filename matches exactly
+        // Registering your PWA Builder service worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('pwabuilder-sw.js')
-                    .then(reg => console.log('PWA Builder SW registered'))
-                    .catch(err => console.log('SW registration failed:', err));
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW failed:', err));
             });
         }
 
@@ -117,7 +118,6 @@
         resize();
 
         function update() {
-            // UI logic and state updates go here
             draw();
             requestAnimationFrame(update);
         }
