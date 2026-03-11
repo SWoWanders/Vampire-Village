@@ -44,33 +44,36 @@
     </div>
 
     <script type="module">
-        // 1. PWA SERVICE WORKER
+        // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('pwabuilder-sw.js').catch(err => console.log(err));
             });
         }
 
-        // 2. GAME ENGINE
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const bloodFill = document.getElementById('blood-fill');
         const scoreEl = document.getElementById('score');
 
+        // Game State
         let bloodLevel = 0;
         let score = 0;
-
-        // Player / Dracula Setup
-        const player = { x: 300, y: 500, size: 20, speed: 5 };
-
-        // Village Generation Logic
         const houses = [];
-        for(let i=0; i<5; i++) {
-            houses.push({
-                x: Math.random() * 500 + 50,
-                y: Math.random() * 700 + 50,
-                w: 60, h: 40
-            });
+        const player = { x: 300, y: 500, size: 24, speed: 4 };
+
+        // Village Generation
+        function initVillage() {
+            houses.length = 0;
+            for(let i = 0; i < 8; i++) {
+                houses.push({
+                    x: Math.random() * 500 + 50,
+                    y: Math.random() * 700 + 50,
+                    w: 60,
+                    h: 40,
+                    color: '#4a3728'
+                });
+            }
         }
 
         function resize() {
@@ -79,33 +82,61 @@
         }
         window.addEventListener('resize', resize);
         resize();
+        initVillage();
 
-        // Basic Movement for testing
-        window.addEventListener('keydown', (e) => {
-            if(e.key === 'ArrowUp') player.y -= player.speed;
-            if(e.key === 'ArrowDown') player.y += player.speed;
-            if(e.key === 'ArrowLeft') player.x -= player.speed;
-            if(e.key === 'ArrowRight') player.x += player.speed;
-        });
+        // Input Handling
+        const keys = {};
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
 
         function update() {
-            // Your collision logic (e.g., house.y - house.h) goes here
+            // Movement
+            if (keys['ArrowUp'] || keys['w']) player.y -= player.speed;
+            if (keys['ArrowDown'] || keys['s']) player.y += player.speed;
+            if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed;
+            if (keys['ArrowRight'] || keys['d']) player.x += player.speed;
+
+            // Simple Collision with Houses
+            houses.forEach(house => {
+                if (player.x < house.x + house.w &&
+                    player.x + player.size > house.x &&
+                    player.y < house.y + house.h &&
+                    player.y + player.size > house.y) {
+                    // Collision logic: Snap player to edge (Simple version)
+                    if (keys['ArrowUp'] || keys['w']) player.y += player.speed;
+                    if (keys['ArrowDown'] || keys['s']) player.y -= player.speed;
+                    if (keys['ArrowLeft'] || keys['a']) player.x += player.speed;
+                    if (keys['ArrowRight'] || keys['d']) player.x -= player.speed;
+                }
+            });
+
+            // Update UI
             bloodFill.style.width = `${bloodLevel}%`;
             scoreEl.textContent = score;
+
             draw();
             requestAnimationFrame(update);
         }
 
         function draw() {
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = '#0a0505';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             // Draw Houses
-            ctx.fillStyle = '#444';
-            houses.forEach(h => ctx.fillRect(h.x, h.y, h.w, h.h));
+            houses.forEach(house => {
+                ctx.fillStyle = house.color;
+                ctx.fillRect(house.x, house.y, house.w, house.h);
+                // Roof
+                ctx.fillStyle = '#2a1a1a';
+                ctx.beginPath();
+                ctx.moveTo(house.x - 5, house.y);
+                ctx.lineTo(house.x + house.w + 5, house.y);
+                ctx.lineTo(house.x + (house.w/2), house.y - 20);
+                ctx.fill();
+            });
 
-            // Draw Dracula
-            ctx.fillStyle = '#f00';
+            // Draw Dracula (Red Square placeholder for sprite)
+            ctx.fillStyle = '#ff0000';
             ctx.fillRect(player.x, player.y, player.size, player.size);
         }
 
