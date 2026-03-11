@@ -5,6 +5,14 @@
   "name": "Vampire Village",
   "orientation": "portrait-primary",
   "scope": "/",
+  "icons": [
+  {
+    "src": "vampire village logo.png", 
+    "sizes": "512x512",
+    "type": "image/png",
+    "purpose": "any"
+  }
+]
   "short_name": "VVGame",
   "start_url": "index.html",
   "theme_color": "#ff0000",
