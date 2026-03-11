@@ -7,7 +7,7 @@
   "scope": "/",
   "icons": [
   {
-    "src": "vampire village logo.png", 
+    "src": "VV.png", 
     "sizes": "512x512",
     "type": "image/png",
     "purpose": "any"
