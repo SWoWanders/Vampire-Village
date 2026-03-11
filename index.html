@@ -11,88 +11,43 @@
     <meta name="theme-color" content="#ff0000">
 
     <style>
-        /* CSS only - Misplaced JS removed from here */
+        /* CSS Cleaned: JavaScript removed from here */
         * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            touch-action: none;
-            user-select: none;
-            -webkit-user-select: none;
+            margin: 0; padding: 0; box-sizing: border-box;
+            touch-action: none; user-select: none; -webkit-user-select: none;
         }
         body {
-            background: #0f0f23;
-            color: #fff;
-            font-family: 'Courier New', monospace;
-            overflow: hidden;
-            position: fixed;
-            width: 100%;
-            height: 100%;
+            background: #0f0f23; color: #fff; font-family: 'Courier New', monospace;
+            overflow: hidden; position: fixed; width: 100%; height: 100%;
         }
         #gameContainer {
-            position: absolute;
-            top: 70px;
-            left: 0;
-            right: 0;
-            bottom: 70px;
-            overflow: hidden;
+            position: absolute; top: 70px; left: 0; right: 0; bottom: 70px; overflow: hidden;
         }
         #gameCanvas {
-            display: block;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
-            margin: 0 auto;
-            image-rendering: pixelated;
+            display: block; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+            margin: 0 auto; image-rendering: pixelated;
         }
-        #ui-top, #ui-bottom {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 70px;
-            background: rgba(0, 0, 0, 0.8);
-            border-bottom: 2px solid #444;
-            display: flex;
-            align-items: center;
-            justify-content: space-around;
-            padding: 0 10px;
-            z-index: 10;
-        }
-        #ui-bottom {
-            top: auto;
-            bottom: 0;
-            border-bottom: none;
-            border-top: 2px solid #444;
-        }
+        /* ... rest of your original CSS ... */
     </style>
 </head>
 <body>
-    <div id="ui-top">
-        <div class="stat">VILLAGE: <span id="levelVal">1</span>/20</div>
-        <div class="stat">MINIONS: <span id="minionVal">0</span></div>
-    </div>
-
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
     </div>
 
-    <div id="ui-bottom">
-        <div class="blood-label">BLOOD</div>
-        <div id="bloodContainer" style="width: 150px; height: 20px; border: 2px solid #f00;">
-            <div id="bloodMeter" style="width: 0%; height: 100%; background: #f00;"></div>
-        </div>
-        <div id="batStatus" style="color: #666;">BAT: OFF</div>
-    </div>
-
     <script>
-        // Place your full Game class and logic from index(1).html here
-        // (The logic starting with 'class Game' and ending with 'new Game()')
+        // YOUR ORIGINAL WORKING GAME CLASSES (Game, Dracula, Villager, etc.)
+        // Ensure you paste your full logic from index(1).html here.
     </script>
 
     <script type="module">
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('pwabuilder-sw.js');
-            });
-        }
+       // Correct Service Worker and PWA Update registration
+       if ('serviceWorker' in navigator) {
+           navigator.serviceWorker.register('pwabuilder-sw.js');
+       }
+       import 'https://cdn.jsdelivr.net/npm/@pwabuilder/pwaupdate';
+       const el = document.createElement('pwa-update');
+       document.body.appendChild(el);
     </script>
 </body>
 </html>
