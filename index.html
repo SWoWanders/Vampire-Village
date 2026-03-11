@@ -7,124 +7,106 @@
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ff0000">
-    
     <link rel="icon" type="image/png" href="VV.png">
     <link rel="apple-touch-icon" href="VV.png">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <style>
-        :root {
-            --vampire-red: #ff0000;
-            --blood-dark: #1a0000;
-        }
-
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #000;
+            display: flex; justify-content: center; align-items: center;
             font-family: 'Courier New', Courier, monospace;
             touch-action: none;
         }
-
         #game-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            background: var(--blood-dark);
-            border: 4px solid #330000;
-            box-sizing: border-box;
-            max-width: 600px;
+            position: relative; width: 100vw; height: 100vh;
+            background: #1a0000; max-width: 600px;
         }
-
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            image-rendering: pixelated;
-        }
-
+        canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
         #ui-layer {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            color: var(--vampire-red);
-            pointer-events: none;
-            text-shadow: 2px 2px #000;
-            display: flex;
-            justify-content: space-between;
-            font-weight: bold;
-            z-index: 10;
+            position: absolute; top: 20px; left: 20px; right: 20px;
+            color: #ff0000; pointer-events: none; text-shadow: 2px 2px #000;
+            display: flex; justify-content: space-between; z-index: 10;
         }
-
-        .meter-container {
-            width: 120px;
-            height: 12px;
-            border: 2px solid var(--vampire-red);
-            background: #000;
-            margin-top: 4px;
-        }
-
-        #blood-fill {
-            height: 100%;
-            width: 0%;
-            background-color: var(--vampire-red);
-            transition: width 0.2s ease-out;
-        }
+        .meter-container { width: 120px; height: 12px; border: 2px solid #ff0000; background: #000; }
+        #blood-fill { height: 100%; width: 0%; background-color: #ff0000; transition: width 0.2s; }
     </style>
 </head>
 <body>
-
     <div id="game-container">
         <div id="ui-layer">
-            <div>VILLAGES<br><span id="score">0</span> / 20</div>
-            <div style="text-align: right;">
-                BLOOD METER
-                <div class="meter-container"><div id="blood-fill"></div></div>
-            </div>
+            <div>VILLAGES: <span id="score">0</span>/20</div>
+            <div style="text-align: right;">BLOOD <div class="meter-container"><div id="blood-fill"></div></div></div>
         </div>
         <canvas id="gameCanvas"></canvas>
     </div>
 
     <script type="module">
-        // Registering your PWA Builder service worker
+        // 1. PWA SERVICE WORKER
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('pwabuilder-sw.js')
-                    .then(reg => console.log('SW registered'))
-                    .catch(err => console.log('SW failed:', err));
+                navigator.serviceWorker.register('pwabuilder-sw.js').catch(err => console.log(err));
             });
         }
 
+        // 2. GAME ENGINE
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const bloodFill = document.getElementById('blood-fill');
         const scoreEl = document.getElementById('score');
 
-        function resize() {
-            canvas.width = 600; 
-            canvas.height = window.innerHeight * (600 / window.innerWidth);
+        let bloodLevel = 0;
+        let score = 0;
+
+        // Player / Dracula Setup
+        const player = { x: 300, y: 500, size: 20, speed: 5 };
+
+        // Village Generation Logic
+        const houses = [];
+        for(let i=0; i<5; i++) {
+            houses.push({
+                x: Math.random() * 500 + 50,
+                y: Math.random() * 700 + 50,
+                w: 60, h: 40
+            });
         }
 
+        function resize() {
+            canvas.width = 600;
+            canvas.height = window.innerHeight * (600 / window.innerWidth);
+        }
         window.addEventListener('resize', resize);
         resize();
 
+        // Basic Movement for testing
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowUp') player.y -= player.speed;
+            if(e.key === 'ArrowDown') player.y += player.speed;
+            if(e.key === 'ArrowLeft') player.x -= player.speed;
+            if(e.key === 'ArrowRight') player.x += player.speed;
+        });
+
         function update() {
+            // Your collision logic (e.g., house.y - house.h) goes here
+            bloodFill.style.width = `${bloodLevel}%`;
+            scoreEl.textContent = score;
             draw();
             requestAnimationFrame(update);
         }
 
         function draw() {
-            ctx.fillStyle = '#1a0000';
+            ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Houses
+            ctx.fillStyle = '#444';
+            houses.forEach(h => ctx.fillRect(h.x, h.y, h.w, h.h));
+
+            // Draw Dracula
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(player.x, player.y, player.size, player.size);
         }
 
         update();
