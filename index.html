@@ -14,17 +14,6 @@
             user-select: none;
             -webkit-user-select: none;
         }
-// This is the "Offline copy of pages" service worker
-
-const CACHE = "pwabuilder-offline";
-
-importScripts('https://storage.googleapis.com/workbox-cdn/releases/5.1.2/workbox-sw.js');
-
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-});
 
 workbox.routing.registerRoute(
   new RegExp('/*'),
@@ -2064,5 +2053,11 @@ workbox.routing.registerRoute(
             const game = new Game();
         }
     </script>
+    <script type="module">
+       import 'https://cdn.jsdelivr.net/npm/@pwabuilder/pwaupdate';
+       const el = document.createElement('pwa-update');
+       document.body.appendChild(el);
+    </script>
+</body>
 </body>
   </html>
