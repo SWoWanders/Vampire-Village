@@ -1,0 +1,17 @@
+{
+  "background_color": "#000000",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Vampire Village",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "short_name": "VVGame",
+  "start_url": "index.html",
+  "theme_color": "#ff0000",
+  "id": "Vampire Village Game",
+  "description": "A vampire arcade game where you play as Dracula, draining villagers to convert them into vampire minions while avoiding garlic and stakes. Fill your blood meter to transform into a bat and fly over rooftops. Conquer 20 villages to win.",
+  "categories": [
+    "games"
+  ],
+  "lang": "en"
+}
