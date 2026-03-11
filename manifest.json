@@ -6,13 +6,13 @@
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [
-  {
-    "src": "VV.png", 
-    "sizes": "512x512",
-    "type": "image/png",
-    "purpose": "any"
-  }
-]
+    {
+      "src": "VV.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
   "short_name": "VVGame",
   "start_url": "index.html",
   "theme_color": "#ff0000",
