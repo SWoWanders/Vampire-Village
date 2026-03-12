@@ -15,7 +15,7 @@
     {
       "src": "VV.png",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/jpg",
       "purpose": "maskable"
     }
   ],
@@ -23,28 +23,28 @@
     {
       "src": "screenshot (1).jpg",
       "sizes": "1433x2467",
-      "type": "image/png",
+      "type": "image/jpg",
       "form_factor": "narrow",
       "label": "Dracula's Village - Gameplay"
     },
     {
       "src": "screenshot (2).jpg",
       "sizes": "1440x2475",
-      "type": "image/png",
+      "type": "image/jpg",
       "form_factor": "narrow",
       "label": "Dracula's Village - Gameplay"
     },
     {
       "src": "screenshot (3).jpg",
       "sizes": "1426x2478",
-      "type": "image/png",
+      "type": "image/jpg",
       "form_factor": "narrow",
       "label": "Dracula's Village - Victory!"
     },
     {
       "src": "screenshot (4).jpg",
       "sizes": "1431x2481",
-      "type": "image/png",
+      "type": "image/jpg",
       "form_factor": "narrow",
       "label": "Dracula's Village - Gameplay"
     }
