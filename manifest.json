@@ -1,0 +1,54 @@
+{
+  "name": "Vampire Village",
+  "short_name": "VVGame",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#ff0000",
+  "icons": [
+    {
+      "src": "VV.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "VV.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshot (1).jpg",
+      "sizes": "1433x2467",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Dracula's Village - Gameplay"
+    },
+    {
+      "src": "screenshot (2).jpg",
+      "sizes": "1440x2475",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Dracula's Village - Gameplay"
+    },
+    {
+      "src": "screenshot (3).jpg",
+      "sizes": "1426x2478",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Dracula's Village - Victory!"
+    },
+    {
+      "src": "screenshot (4).jpg",
+      "sizes": "1431x2481",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Dracula's Village - Gameplay"
+    }
+  ],
+  "id": "Vampire Village Game",
+  "description": "A vampire arcade game where you play as Dracula, draining villagers to convert them into vampire minions while avoiding garlic and stakes. Fill your blood meter to transform into a bat and fly over rooftops. Conquer 20 villages to win."
+}
